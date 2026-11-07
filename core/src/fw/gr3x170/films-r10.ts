@@ -72,6 +72,7 @@ import { FirmwareError } from '../types';
 import { GR3X_FILMS_MODULE } from './films-native';
 import { GR3X_R10, GR3X_SETTINGS_LOAD, GR3X_SETTINGS_SAVE, gr3xSettingsHook, gr3xSettingsPrior } from './round10';
 import type { Gr3xSite } from './round10';
+import { GR3X_HC_FLAG_LOAD, GR3X_HC_FLAG_LOAD_WORD, GR3X_SET_STORE, GR3X_SET_STORE_WORD } from './multiaxis';
 
 export const GR3X_BLEACH = 18;
 export const GR3X_FILM_LOOKS = 84;
@@ -94,12 +95,14 @@ export interface Gr3xR10Program {
 }
 
 /** A film of the build: its look, its tone record (in the appended data), icon. */
-export interface Gr3xR10Film { id: number; record: number; iconId: number; print: number }
+export interface Gr3xR10Film { id: number; record: number; iconId: number; print: number;
+  /** GRKit hue sectors: the film's own MultiAxial set, and its set for highlight correction (multiaxis.ts). */
+  multiAxis?: { set: number; halved: number } }
 
 const u32le = (words: readonly number[]) => wordsToBytes(words.map(w => w >>> 0));
 
 // ------------------------------------------------------------------ the three tables
-const TONE_TABLE = 0x55018d9c, MA_TABLE = 0x55018cf8, YCC_TABLE = 0x55018e54;
+const TONE_TABLE = 0x55018d9c; export const MA_TABLE = 0x55018cf8; const YCC_TABLE = 0x55018e54;
 /** [table, register, movw, movt] as the builder loads them. */
 const TABLE_SITES = [[TONE_TABLE, 0, 0x536dc264, 0x536dc26c], [MA_TABLE, 12, 0x536dc268, 0x536dc270], [YCC_TABLE, 0, 0x536dc27c, 0x536dc280]] as const;
 const TABLE_INDEX = [[0x536dc278, 0xe790e101], [0x536dc288, 0xe79cc101], [0x536dc294, 0xe7901101]] as const;
@@ -107,17 +110,32 @@ const TABLE_INDEX = [[0x536dc278, 0xe790e101], [0x536dc288, 0xe79cc101], [0x536d
 export function installGr3xR10Tables(p: Gr3xR10Program, films: readonly Gr3xR10Film[]) {
   for (const [at, w] of TABLE_INDEX) if (p.u32(at) !== w) fail(`descriptor table index at ${at.toString(16)}`);
   const out: number[] = [];
+  let maWords: number[] = [];
   TABLE_SITES.forEach(([table, r, low, high], t) => {
     if (p.u32(low) !== movWord(r, lo(table)) || p.u32(high) !== movWord(r, hi(table), true)) fail(`descriptor table at ${low.toString(16)}`);
     const native = Array.from({ length: 26 }, (_, i) => new DataView(p.read(table + 4 * i, 4).buffer).getUint32(0, true));
     const words = Array.from({ length: GR3X_FILM_LOOKS }, (_, i) => i < 26 ? native[i] : native[STANDARD]);
-    films.forEach(f => { if (t === 0) words[f.id] = f.record; });
+    films.forEach(f => { if (t === 0) words[f.id] = f.record; if (t === 1 && f.multiAxis) words[f.id] = f.multiAxis.set; });
+    if (t === 1) maWords = words.slice();
     const copy = p.append(u32le(words));
     p.patch(low, movWord(r, lo(table)), movWord(r, lo(copy)), 'films as looks: descriptor table by look (84 entries), low half');
     p.patch(high, movWord(r, hi(table), true), movWord(r, hi(copy), true), 'films as looks: descriptor table by look (84 entries), high half');
     out.push(copy);
   });
-  return { toneTable: out[0], multiAxisTable: out[1], yccTable: out[2] };
+  // Films with their own MultiAxial set: with highlight correction (lr = [fp - 0x30], loaded just
+  // before) the set comes from a second table (the halved sets; every other look as in the first).
+  const own = films.filter(f => f.multiAxis);
+  let halvedTable: number | undefined;
+  if (own.length) {
+    if (p.u32(GR3X_HC_FLAG_LOAD) !== GR3X_HC_FLAG_LOAD_WORD || p.u32(GR3X_SET_STORE) !== GR3X_SET_STORE_WORD) fail('multi-axis set store');
+    const words = maWords.slice();
+    own.forEach(f => { words[f.id] = f.multiAxis!.halved; });
+    halvedTable = p.append(u32le(words));
+    // r1 is still the look; the flags are set again at 0x536dc298 before they are read.
+    const stub = p.code(`cmp lr,#0;movwne ip,#${lo(halvedTable)};movtne ip,#${hi(halvedTable)};ldrne ip,[ip,r1,lsl #2];str ip,[r4,#0xc];b #${GR3X_SET_STORE + 4};`);
+    p.patch(GR3X_SET_STORE, GR3X_SET_STORE_WORD, branchWord(GR3X_SET_STORE, stub), 'films: own MultiAxial set (hue sectors), the halved set with highlight correction');
+  }
+  return { toneTable: out[0], multiAxisTable: out[1], yccTable: out[2], ...(halvedTable !== undefined ? { multiAxisHalvedTable: halvedTable } : {}) };
 }
 
 /** The four words the camera's start-up gives every native tone record (0x536eb0bc) at words 17..20. */

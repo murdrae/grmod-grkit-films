@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { FACTORY_LOOK_IDS, card, GR3X_FILM_IDS, GR3X_MAX_CUSTOM_RATIOS, GR3X_T4_CUSTOM, LANGS, MAX_CUSTOM_RATIOS, MAX_EXTRA_SLOTS, SHUTDOWN_MAX_PICTURES, SHUTDOWN_NAME_MAX, validateExtraSlotName, validateGr3xRatioName, validateRatioName, validateShutdownName } from '@grmod/core';
+import { FACTORY_LOOK_IDS, card, GR3X_FILM_IDS, isGrkitEffect, GR3X_MAX_CUSTOM_RATIOS, GR3X_T4_CUSTOM, LANGS, MAX_CUSTOM_RATIOS, MAX_EXTRA_SLOTS, SHUTDOWN_MAX_PICTURES, SHUTDOWN_NAME_MAX, validateExtraSlotName, validateGr3xRatioName, validateRatioName, validateShutdownName } from '@grmod/core';
 import type { CameraModel, ClarityChange, ExtraSlotSpec, FirmwareInfo, FirmwareSummary, LangCode, LookLayout, PresetResult, RatioPreview, RatioSpec, ShutdownPictureSpec, SlotId, SlotRequest, SoftFocusRequest, SoftFocusStrength } from '@grmod/core';
 import { engine, EngineError } from './engine';
 import { host, HostError, sha256Hex } from './host';
@@ -14,7 +14,7 @@ import defaultPhotoUrl from './assets/preview.jpg';
 export type Page = 'ic' | 'ratio' | 'wall' | 'copies';
 /** One added aspect ratio as typed; `preview` is what the camera would make of it (absent while that is worked out). */
 export interface RatioItem { id: string; ratio: string; name: string; preview?: RatioPreview }
-export interface PresetState { fileName: string; kind: 'xmp' | 'cube'; text: string; busy: boolean; result?: PresetResult; error?: string }
+export interface PresetState { fileName: string; kind: 'xmp' | 'cube' | 'grkit'; text: string; busy: boolean; result?: PresetResult; error?: string }
 export interface IconState { mode: 'keep' | 'text' | 'image'; text: string; style: 'film' | 'plain'; image?: string; pixels?: Uint8Array }
 /** `halation`: Cinema Yellow / Green with a preset (0.8.2); their Toning becomes the Halation slider. */
 export interface SlotState { preset?: PresetState; names: Partial<Record<LangCode, string>>; icon: IconState; halation?: HalationState }
@@ -507,7 +507,7 @@ const PRESET_ERRORS: Record<string, Key> = {
 /** The newest conversion of each slot: an older one that finishes later is dropped. */
 const presetRuns = new Map<SlotKey, number>();
 let presetRun = 0;
-async function runPreset(id: SlotKey, fileName: string, kind: 'xmp' | 'cube', text: string): Promise<void> {
+async function runPreset(id: SlotKey, fileName: string, kind: 'xmp' | 'cube' | 'grkit', text: string): Promise<void> {
   patchSlot(id, { preset: { fileName, kind, text, busy: !!state.info?.capabilities.presets } });
   if (!state.info?.capabilities.presets) return;
   const run = ++presetRun;
@@ -521,7 +521,7 @@ async function runPreset(id: SlotKey, fileName: string, kind: 'xmp' | 'cube', te
   } catch (e) {
     if (presetRuns.get(id) !== run || slotOf(id)?.preset?.text !== text) return;
     const code = e instanceof EngineError ? e.code : '';
-    patchSlot(id, { preset: { fileName, kind, text, busy: false, error: PRESET_ERRORS[code] ? t(PRESET_ERRORS[code]) : t('errNotXmp') } });
+    patchSlot(id, { preset: { fileName, kind, text, busy: false, error: PRESET_ERRORS[code] ? t(PRESET_ERRORS[code]) : kind === 'grkit' && e instanceof Error ? e.message : t('errNotXmp') } });
   }
 }
 /** Text of a preset file whatever its encoding: UTF-8, UTF-16 (with or without BOM) or GB18030. */
@@ -539,7 +539,7 @@ export async function loadPresetFile(id: SlotKey, file: File): Promise<void> {
   if (file.size > 120_000_000) { toast(t('errTooBig'), 'error'); return; }
   const text = decodeText(new Uint8Array(await file.arrayBuffer()));
   const lower = file.name.toLowerCase();
-  const kind: 'xmp' | 'cube' = lower.endsWith('.cube') ? 'cube' : lower.endsWith('.xmp') ? 'xmp' : /LUT_(3D|1D)_SIZE/i.test(text) ? 'cube' : 'xmp';
+  const kind: 'xmp' | 'cube' | 'grkit' = isGrkitEffect(text) ? 'grkit' : lower.endsWith('.cube') ? 'cube' : lower.endsWith('.xmp') ? 'xmp' : /LUT_(3D|1D)_SIZE/i.test(text) ? 'cube' : 'xmp';
   setActiveSlot(id);
   if (host.available) await host.storeSet(presetKey(id), text).catch(() => undefined);
   await runPreset(id, file.name, kind, text);
@@ -1181,7 +1181,7 @@ export function pendingChanges(s: State = state): SlotChange[] {
   for (const id of availableSlots(s)) {
     const sl = s.slots[id]; const off = s.info.slots.find((x) => x.id === id)!;
     const req: SlotRequest = { slot: id }; const parts: string[] = []; const labels: string[] = [];
-    if (sl.preset?.result) { const r = sl.preset.result; req.preset = { matrixQ13: r.matrixQ13, curves: r.curves, ...(r.postQ9 ? { postQ9: r.postQ9 } : {}) }; parts.push(`${t('preset')} ${sl.preset.result.title || sl.preset.fileName}`); labels.push(t('preset')); }
+    if (sl.preset?.result) { const r = sl.preset.result; req.preset = { matrixQ13: r.matrixQ13, curves: r.curves, ...(r.postQ9 ? { postQ9: r.postQ9 } : {}), ...(r.hue ? { hue: r.hue } : {}) }; parts.push(`${t('preset')} ${sl.preset.result.title || sl.preset.fileName}`); labels.push(t('preset')); }
     if (sl.icon.mode !== 'keep' && sl.icon.pixels) { req.icon = sl.icon.pixels; parts.push(t('icon')); labels.push(t('icon')); }
     const names: Partial<Record<LangCode, string>> = {};
     for (const lang of LANGS) {

@@ -54,9 +54,11 @@ def matrix_process(probe):
     return bytes(cpu.mem_read(MATRIX_OBJECT, 0x60))
 
 
-def descriptor(probe, identity, parameters):
+def descriptor(probe, identity, parameters, highlight=0):
     probe.descriptor(identity)
     probe.uc.mem_write(COMMON + 0x77d, bytes(parameters))
+    # The builder's highlight-correction flag ([fp - 0x30], read from the settings' byte 0xb7e).
+    if highlight: probe.uc.mem_write(COMMON + 0xb7e, bytes([highlight]))
     probe.uc.mem_write(OBJECT, bytes(0x300))
     probe.uc.mem_write(OUTPUT, b'\xa5' * 0x120)
     probe.call(0x536dc0cc, OBJECT, CONTEXT, OUTPUT)

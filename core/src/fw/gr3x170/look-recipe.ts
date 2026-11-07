@@ -20,7 +20,7 @@ export function encodeGr3xLookRecipe(options: Gr3xLookOptions): Uint8Array {
       ...(f.icon ? { icon: Array.from(f.icon) } : {}),
       ...(f.params ? { params: { M1: f.params.M1, ck: f.params.ck.map(c => Array.from(c)) } } : {}),
       ...(f.preset ? { preset: { matrixQ13: Array.from(f.preset.matrixQ13), curves: f.preset.curves.map(c => Array.from(c)),
-        ...(f.preset.postQ9 ? { postQ9: Array.from(f.preset.postQ9) } : {}) } } : {}),
+        ...(f.preset.postQ9 ? { postQ9: Array.from(f.preset.postQ9) } : {}), ...(f.preset.hue ? { hue: f.preset.hue } : {}) } } : {}),
       ...(f.halation ? { halation: f.halation } : {}),
     })),
   };

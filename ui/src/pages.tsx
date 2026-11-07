@@ -24,6 +24,8 @@ import {
 import type { ExtraSlot, RatioItem, SlotKey, WallItem } from './store';
 
 const isPreset = (f: File): boolean => /\.(xmp|cube)$/i.test(f.name);
+/** GR III / IIIx films also take GRKit effect definitions (effect.json). */
+const isGr3Preset = (f: File): boolean => /\.(xmp|cube|json)$/i.test(f.name);
 const isFirmware = (f: File): boolean => /\.bin$/i.test(f.name);
 const isImage = (f: File): boolean => /^image\//.test(f.type) || /\.(jpe?g|png|webp|bmp|gif|avif)$/i.test(f.name);
 
@@ -200,7 +202,7 @@ function SlotCard({ id }: { id: SlotId }) {
   const p = slot.preset;
   const first = id === 'CY'; // the one the tour points at
   return (
-    <DropZone className={`card ${active ? 'on' : ''}`} tour={first ? 'ic-slot' : undefined} accept={isPreset} onFiles={(f) => { void loadPresetFile(id, f[0]); }}>
+    <DropZone className={`card ${active ? 'on' : ''}`} tour={first ? 'ic-slot' : undefined} accept={gr3x ? isGr3Preset : isPreset} onFiles={(f) => { void loadPresetFile(id, f[0]); }}>
       <div className="card-in" onPointerDownCapture={() => setActiveSlot(id)} onFocusCapture={() => setActiveSlot(id)}>
         <div className="card-head">
           <IconCanvas pixels={slot.icon.mode !== 'keep' && slot.icon.pixels ? slot.icon.pixels : off.icon} />
@@ -215,14 +217,14 @@ function SlotCard({ id }: { id: SlotId }) {
         </div>
         <div className="props">
           <Prop label={t('preset')} tour={first ? 'ic-preset' : undefined}>
-            {!p && <FileButton className="btn dashed fill" accept=".xmp,.cube" onFiles={(f) => { void loadPresetFile(id, f[0]); }}>{Ico.plus}<span>{t('dropPreset')}</span></FileButton>}
+            {!p && <FileButton className="btn dashed fill" accept={gr3x ? '.xmp,.cube,.json' : '.xmp,.cube'} onFiles={(f) => { void loadPresetFile(id, f[0]); }}>{Ico.plus}<span>{t(gr3x ? 'dropPresetGr3' : 'dropPreset')}</span></FileButton>}
             {p && (
               <div className="preset">
                 <div className={`file-chip ${p.error ? 'bad' : ''}`}>
-                  <FileButton className="file-main" accept=".xmp,.cube" title={t('replace')} onFiles={(f) => { void loadPresetFile(id, f[0]); }}>{Ico.file}<span className="ellipsis">{p.result?.title || p.fileName}</span></FileButton>
+                  <FileButton className="file-main" accept={gr3x ? '.xmp,.cube,.json' : '.xmp,.cube'} title={t('replace')} onFiles={(f) => { void loadPresetFile(id, f[0]); }}>{Ico.file}<span className="ellipsis">{p.result?.title || p.fileName}</span></FileButton>
                   <button className="file-x" title={t('remove')} aria-label={t('remove')} onClick={() => removePreset(id)}>{Ico.x}</button>
                 </div>
-                {gr3x && p.result && <p className="small muted">{t('gr3xFit', { mean: p.result.meanDE.toFixed(1), p95: p.result.p95DE.toFixed(1) })}{p.result.p95DE > 6 && <><br />{t('gr3xFitPoor')}</>}</p>}
+                {gr3x && p.result && Number.isFinite(p.result.meanDE) && <p className="small muted">{t('gr3xFit', { mean: p.result.meanDE.toFixed(1), p95: p.result.p95DE.toFixed(1) })}{p.result.p95DE > 6 && <><br />{t('gr3xFitPoor')}</>}</p>}
                 {(p.busy || p.error) && (
                   <div className="chips">
                     {p.busy && <span className="chip muted"><span className="spinner small" />{t('converting')}</span>}

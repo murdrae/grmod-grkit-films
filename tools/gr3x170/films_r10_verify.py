@@ -63,6 +63,20 @@ def run_site(p,at,regs,flags,stop=None,count=200):
     assert c.reg_read(reg.UC_ARM_REG_SP)==STACK
     return [c.reg_read(getattr(reg,'UC_ARM_REG_R'+str(i))) for i in range(13)],c.reg_read(reg.UC_ARM_REG_CPSR)
 
+# GRKit's MultiAxial set (runtime/install_effects.h multiaxial), written out again here as a check of multiaxis.ts.
+GK_BOUNDS=[1490,745,0,0,1304,559,0,0,1862,1118,373,0,1676,931,187,0];GK_SEL=[3,2,1,0,0,11,10,9,0,0,9,8,7,6,0,6,5,4,3,0]
+def check_sets(probe,sets,std):
+    uc=probe.uc;rd=lambda a,n,f:struct.unpack(f'<{n}{f}',bytes(uc.mem_read(a,struct.calcsize(f'<{n}{f}'))))
+    a=rd(sets['set'],6,'I');b=rd(sets['halved'],6,'I')
+    assert a[:4]==b[:4] and a[5]==b[5] and a[3]==u32(uc,std+12) and a[5]==u32(uc,std+20)
+    assert list(rd(a[0],16,'H'))==GK_BOUNDS and list(rd(a[1],20,'B'))==GK_SEL
+    hdr=rd(a[2],5,'I');assert len(set(hdr))==1
+    m=rd(hdr[0],540,'i');assert m[:9]==(1024,0,0,0,1024,0,0,0,1024)
+    for k in range(60):assert sum(m[k*9:k*9+3])==sum(m[k*9+3:k*9+6])==sum(m[k*9+6:k*9+9])==1024
+    c=rd(a[4],21,'H');h=rd(b[4],21,'H')
+    assert c[0]==c[9]==0 and c[18:]==(164,655,4095) and h[18:]==(82,327,2047) and h[10:14]==c[10:14]
+    for k in range(4):
+        sl=(c[14+k]&0x1ff)-(0x200 if c[14+k]&0x100 else 0);assert h[14+k]==max(-256,min(255,sl*2))&0x1ff
 def verify(data,base,manifest):
     assert manifest.get('round10') and manifest['kind']=='gr3x-image-control-patchset'
     f=manifest['lookEntries']['films'];n=manifest['filmCount'];slots=manifest['addedLooks'];calls=0;cases=0
@@ -131,21 +145,26 @@ def verify(data,base,manifest):
         assert patched.call(0x532a9950,OBJECT,s['id'])==s['textId'] and patched.call(0x532a9a7c,OBJECT,s['id'])==s['iconId'];calls+=2
     # 3. Descriptors.
     for look in NATIVE:
+      for hc in (0,1):
         for value in (0,4,8):
             params=[4]*26
             for off in (0,1,2,3,4,5,7,9,10,11,22,23):params[off]=value
             # Bleach Bypass's Toning (0x786, params[9]) outside 1..3 reads as 1 (the clamp of section 5).
             clamped=list(params)
             if not 1<=clamped[9]<=3:clamped[9]=1
-            assert descriptor(patched,look,params)==descriptor(stock,look,clamped if look==18 else params),look
+            assert descriptor(patched,look,params,hc)==descriptor(stock,look,clamped if look==18 else params,hc),(look,hc)
             assert matrix_process(patched)==matrix_process(stock);calls+=6
     std=descriptor(stock,11,[4]*26)
     for s in slots:
+      # GRKit hue sectors (multiaxis.ts): the film's own MultiAxial set, its halved set with highlight correction.
+      if s.get('multiAxis'):check_sets(patched,s['multiAxis'],u32(stock.uc,0x55018cf8+44));cases+=1
+      for hc in (0,1):
         for params in ([4]*26,[0]*9+[4]*17,[8]*9+[1]*17,[(i*3)%9 for i in range(26)]):
-            want=descriptor(stock,11,params);got=descriptor(patched,s['id'],params)
+            want=descriptor(stock,11,params,hc);got=descriptor(patched,s['id'],params,hc)
             exp=bytearray(want[0]);struct.pack_into('<I',exp,8,s['record'] or u32(stock.uc,OUTPUT+8))
-            assert got[0]==bytes(exp) and got[1]==want[1],s['name']
-            assert u32(patched.uc,OUTPUT+0xc)==u32(stock.uc,OUTPUT+0xc) and u32(patched.uc,OUTPUT+0x18)==u32(stock.uc,OUTPUT+0x18)
+            if s.get('multiAxis'):struct.pack_into('<I',exp,0xc,s['multiAxis']['halved' if hc else 'set'])
+            assert got[0]==bytes(exp) and got[1]==want[1],(s['name'],hc)
+            assert u32(patched.uc,OUTPUT+0x18)==u32(stock.uc,OUTPUT+0x18)
             m=matrix_process(patched);calls+=4
             if s['curves']:
                 assert got[2][:2]==b'\1\1' and u32(patched.uc,GAMMA_OBJECT+20)==s['curveId']

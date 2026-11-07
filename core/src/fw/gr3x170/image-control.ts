@@ -13,7 +13,10 @@ import { GR3X_170, openGr3xOfficial } from './profile';
 import { GR3X_PARAMETER_SETTER_LOOKS, GR3X_STANDARD_ACTIVE_CHECKS, GR3X_STANDARD_ACTIVE_CHECKS_SET0, GR3X_TONE_READS,
   GR3X_PHOTO_STYLE_SETTERS, GR3X_LOAD_CALL, GR3X_LOAD_DATA, GR3X_SAVE_CALL, GR3X_SAVE_DATA,
   GR3X_ZERO_FILL_END, GR3X_GAP, GR3X_HEAP_BASE, GR3X_R10_TONE_READS } from './look-addresses';
-import { GR3X_TONE_RECORD_TAIL, installGr3xR10Parameters, installGr3xR10PictureInfo, installGr3xR10Raw, installGr3xR10Tables } from './films-r10';
+import { appendGr3xMultiAxisSets } from './multiaxis';
+import { grkitHue } from '../../color/grkit';
+import type { GrkitHue } from '../../color/grkit';
+import { MA_TABLE, GR3X_TONE_RECORD_TAIL, installGr3xR10Parameters, installGr3xR10PictureInfo, installGr3xR10Raw, installGr3xR10Tables } from './films-r10';
 import { gr3xFactoryLookOrder } from './look-layout';
 import { installGr3xGuardR10 } from './guard';
 import { gr3xRawDevelopmentWordsR10 } from './datestamp';
@@ -51,7 +54,9 @@ export interface Gr3xFilmLook {
   /** Names for particular camera languages (checked against that language's font characters). */
   names?: Partial<Record<string, string>>;
   params?: SlotParams;
-  preset?: { matrixQ13: ArrayLike<number>; curves: [ArrayLike<number>, ArrayLike<number>, ArrayLike<number>]; postQ9?: ArrayLike<number> };
+  preset?: { matrixQ13: ArrayLike<number>; curves: [ArrayLike<number>, ArrayLike<number>, ArrayLike<number>]; postQ9?: ArrayLike<number>;
+    /** GRKit hue sectors (round 10 only): the film's own MultiAxial set (multiaxis.ts). */
+    hue?: GrkitHue };
   icon?: Uint8Array;
   /** T6 (nine films) only: halation level of this film, fixed in the build (0 off, 1 weak, 2 strong).
    * With `filmCount` every film has the Halation line on the camera's parameter screen instead. */
@@ -75,12 +80,14 @@ export interface Gr3xLookOptions {
 }
 /** Round 7: a film's fingerprint (FNV-1a over its matrix, curves and post-curve matrix as built;
  * never 0, which an empty table holds): a film whose preset changed starts again from neutral. */
-export function gr3xFilmPrint(matrixQ13: ArrayLike<number>, curves: readonly ArrayLike<number>[], postQ9?: ArrayLike<number>): number {
+export function gr3xFilmPrint(matrixQ13: ArrayLike<number>, curves: readonly ArrayLike<number>[], postQ9?: ArrayLike<number>, hue?: GrkitHue): number {
   let h = 0x811c9dc5;
   const add = (v: number) => { for (let k = 0; k < 4; k++) { h ^= (v >>> (8 * k)) & 255; h = Math.imul(h, 0x01000193) >>> 0; } };
   Array.from(matrixQ13).forEach(add);
   curves.forEach(c => Array.from(c).forEach(add));
   add(0x51); if (postQ9) Array.from(postQ9).forEach(add);
+  // Films without hue sectors keep the fingerprint they had.
+  if (hue) { add(0x48); [hue.matrices, ...(hue.levels ?? [])].flat(2).forEach(add); hue.weight.forEach(add); }
   return h || 1;
 }
 /** Round 6: the most films, and the looks reserved for them (64..83) whatever a build has. */
@@ -255,6 +262,7 @@ export async function buildGr3xImageControls(raw: Uint8Array, options: Gr3xLookO
   const slots = specs.map((spec, i) => {
     const id = menu.addedLooks[i].id;
     let record = 0, curves = 0, postQ9: Int16Array | undefined, quantizedCurves: QuantizedSlot['curves'] | undefined, print = 0;
+    let multiAxis: { set: number; halved: number } | undefined;
     const curveId = 0x47430000 + id;
     if (spec.film || spec.base === 20) {
       const rec = originalRead(u32(0x55018d9c + spec.base * 4), 84);
@@ -268,7 +276,11 @@ export async function buildGr3xImageControls(raw: Uint8Array, options: Gr3xLookO
       new DataView(rec.buffer).setUint32(4, append(bytes), true);
       record = append(rec);
       // Round 7: the film's fingerprint (its matrix, curves and post-curve matrix as built).
-      if (quantized) print = gr3xFilmPrint(q, quantized.curves, quantized.postQ9);
+      // GRKit hue sectors: the film's own MultiAxial sets (films-r10.ts puts them in the look's table).
+      const hue = spec.film?.preset?.hue !== undefined ? grkitHue(spec.film.preset.hue) : undefined;
+      if (hue && !round10) throw new FirmwareError('bad-edit', 'IIIx hue sectors need a round 10 build');
+      if (hue) { const std = u32(MA_TABLE + 11 * 4); multiAxis = appendGr3xMultiAxisSets(hue, { region: u32(std + 12), ycc: u32(std + 20) }, append); }
+      if (quantized) print = gr3xFilmPrint(q, quantized.curves, quantized.postQ9, hue);
       if (quantized) {
         const bytes = new Uint8Array(1536), v = new DataView(bytes.buffer);
         quantized.curves.forEach((c, channel) => c.forEach((x, j) => v.setUint16(channel * 512 + j * 2, x, true)));
@@ -281,7 +293,7 @@ export async function buildGr3xImageControls(raw: Uint8Array, options: Gr3xLookO
     if (![0, 1, 2].includes(halation)) throw new FirmwareError('bad-edit', 'IIIx halation level is 0, 1 or 2');
     return { ...menu.addedLooks[i], nativeBase: spec.base, parameters: Array.from(spec.parameters),
       parameterAddress: append(spec.parameters), record, curves, curveId, renderingImplemented: true as const,
-      halation, ...(postQ9 ? { postQ9: Array.from(postQ9) } : {}), quantizedCurves, print };
+      halation, ...(postQ9 ? { postQ9: Array.from(postQ9) } : {}), ...(multiAxis ? { multiAxis } : {}), quantizedCurves, print };
   });
   // Round 6: every film has halation, its level set in the camera (sp_hal_level gives it).
   const halationSlots = round6 ? slots : slots.filter(s => s.halation > 0);
@@ -444,7 +456,7 @@ export async function buildGr3xImageControls(raw: Uint8Array, options: Gr3xLookO
   const r10 = round10 ? (() => {
     const layout = features.lookLayout && !isGr3xFactoryLayout(features.lookLayout, capacity) ? features.lookLayout : undefined;
     const hiddenMask = (layout?.hidden ?? []).filter(id => id >= GR3X_FIRST_FILM && id < GR3X_FIRST_FILM + capacity).reduce((m, id) => (m | (1 << (id - GR3X_FIRST_FILM))) >>> 0, 0);
-    const tables = installGr3xR10Tables(r10Program, slots.filter(s => s.record).map(s => ({ id: s.id, record: s.record, iconId: s.iconId, print: s.print })));
+    const tables = installGr3xR10Tables(r10Program, slots.filter(s => s.record).map(s => ({ id: s.id, record: s.record, iconId: s.iconId, print: s.print, ...(s.multiAxis ? { multiAxis: s.multiAxis } : {}) })));
     const params = installGr3xR10Parameters(r10Program, { films: capacity, prints: slots.slice(0, capacity).map(s => s.print >>> 0), hiddenMask, setterSites: GR3X_PARAMETER_SETTER_LOOKS });
     const guard = installGr3xGuardR10({ code, patch, u32, sites }, { films: capacity, maxRatio: gr3xMaxId(menu.menu), ...(layout ? { hidden: layout.hidden } : {}),
       ...(features.adjSoftFocus ? { softFocusR10: true } : {}) }, params.moduleSymbols.sp_before_recall);

@@ -7,6 +7,7 @@ export { parseXmp } from './xmp';
 export type { XmpLook, RgbTable, LookTable, ToneCurves, CurvePoints } from './xmp';
 export { FullLook, Tone } from './look';
 export { parseCube, applyCube } from './cube';
+export { convertGrkitEffect, isGrkitEffect } from './grkit';
 export type { Cube } from './cube';
 export { fitSlot } from './fit';
 export { hueBlockBytes, hueFromBlock, hueCopy0, hueFromQ10, hueToQ10, HUE_VALUES, HUE_LIMIT, HUE_BLOCK_BYTES } from './hue';

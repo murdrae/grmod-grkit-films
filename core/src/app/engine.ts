@@ -39,6 +39,8 @@ import { GR3X_FILM_IDS, GR3X_FILM_NAMES, GR3X_LOOK_CHARS, validateGr3xLookName }
 import type { Gr3xLookOptions } from '../fw/gr3x/image-control';
 import { GR3X_MAX_FILMS } from '../fw/gr3x/image-control';
 import { convertGr3xCube, convertGr3xXmp } from '../color/gr3x-import';
+import { convertGrkitEffect } from '../color/grkit';
+import type { GrkitHue } from '../color/grkit';
 import type { CameraModel } from '../wallpaper';
 
 export const SHUTDOWN_W = 720;
@@ -101,7 +103,7 @@ export interface FirmwareInfo {
 }
 
 export interface PresetResult {
-  kind: 'xmp' | 'cube';
+  kind: 'xmp' | 'cube' | 'grkit';
   title: string;
   /** CIE76 mean / p95 on the fixed reporting colours (see `Conversion`). */
   meanDE: number;
@@ -116,13 +118,15 @@ export interface PresetResult {
   curves: [Uint16Array, Uint16Array, Uint16Array];
   /** The post-curve ("second") matrix in Q9, rows summing to 512. */
   postQ9?: Int16Array;
+  /** GRKit effects on GR III 2.20 / IIIx 1.70: the hue sectors, built as the film's own MultiAxial set. */
+  hue?: GrkitHue;
   /** Converted with `hue` and kept: the added slot's own hue sectors (copy 0, Q10, 12 x 9). */
   hueQ10?: number[];
 }
 
 export interface SlotRequest {
   slot: SlotId;
-  preset?: { matrixQ13: ArrayLike<number>; curves: [ArrayLike<number>, ArrayLike<number>, ArrayLike<number>]; postQ9?: ArrayLike<number> };
+  preset?: { matrixQ13: ArrayLike<number>; curves: [ArrayLike<number>, ArrayLike<number>, ArrayLike<number>]; postQ9?: ArrayLike<number>; hue?: GrkitHue };
   icon?: Uint8Array;
   names?: Partial<Record<LangCode, string>>;
   /** Halation. GR IV (0.8.2): on or off for Cinema Yellow / Green with a preset (its Toning becomes
@@ -859,9 +863,20 @@ export class Engine {
   /**
    * Fit a preset to a slot: matrix, curves and (unless `post` is false) the post-curve matrix.
    * Without it the result is what GR Mod 0.6.1 and earlier made. `refine` (.cube only, default
-   * off) adds the guarded CIEDE2000 refinement. GR III / IIIx take .xmp and .cube too.
+   * off) adds the guarded CIEDE2000 refinement. GR III / IIIx take .xmp and .cube too, and GRKit
+   * effect definitions (`grkit`): their integers go to the film as they are (color/grkit.ts).
    */
-  convertPreset(kind: 'xmp' | 'cube', text: string, onProgress?: (f: number) => void, options: { post?: boolean; refine?: boolean; hue?: boolean; legacyFit?: boolean } = {}): PresetResult {
+  convertPreset(kind: 'xmp' | 'cube' | 'grkit', text: string, onProgress?: (f: number) => void, options: { post?: boolean; refine?: boolean; hue?: boolean; legacyFit?: boolean } = {}): PresetResult {
+    if (kind === 'grkit') {
+      if (this.info.family !== 'gr3x') requireGr3xPort('GRKit effects on GR IV');
+      const g = convertGrkitEffect(text, this.mStdQ13);
+      onProgress?.(1);
+      // Hue sectors are built as the film's own MultiAxial set by the GR III 2.20 / IIIx 1.70 program only.
+      const hue = g.hue && this.gr3 === Gr3Program220 ? g.hue : undefined;
+      if (g.hue && !hue) { g.unsupported.push('hue sectors'); g.warnings.push(`GRKit: ${g.title}'s hue sectors need GR III 2.20 / IIIx 1.70; on this firmware they are left out and its colours differ from GRKit's.`); }
+      return { kind, title: g.title, meanDE: g.meanDE, p95DE: g.p95DE, warnings: g.warnings, unsupported: g.unsupported, params: g.params,
+        matrixQ13: g.matrixQ13, curves: g.curves, ...(g.postQ9 ? { postQ9: g.postQ9 } : {}), ...(hue ? { hue } : {}) };
+    }
     if (this.info.family === 'gr3x') {
       // The second (post-curve) matrix, as on GR IV: GR III's matrix module has the stage (films only).
       const post = options.post !== false;

@@ -6,6 +6,7 @@ export * as card from './card';
 export * from './app';
 export { FirmwareError } from './fw';
 export { ColorError } from './color';
+export { isGrkitEffect } from './color/grkit';
 export { JpegError } from './jpeg';
 export type { LangCode, NameValidation } from './fw';
 export type { CameraModel } from './wallpaper';

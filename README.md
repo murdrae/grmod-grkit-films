@@ -123,6 +123,7 @@ development, and every picture case against GR IV's 0.8.4 module), `list_width_p
 on GR III (3:4 was tested there); GR IV refuses them from 0.8.2. The GR IV Monochrome looks are
 not ported.
 Camera test procedure: [docs/GR3_HDF_210_TEST.txt](docs/GR3_HDF_210_TEST.txt); IIIx details: [docs/GR3X_HDF.md](docs/GR3X_HDF.md).
+GRKit's film looks (`third_party/grkit`) can be dropped on a GR III / IIIx film card as `effect.json`: matrix, curves and (on GR III 2.20 / IIIx 1.70) hue sectors go over exactly, the post matrix rounded to Q9; see [tools/grkit/README.md](tools/grkit/README.md).
 
 - `core/`  platform-independent TypeScript: firmware container codec and patcher with built-in self-check (`src/fw`), added aspect ratios (`src/fw/aspect`), preset conversion from .xmp Look profiles and .cube LUTs (`src/color`), exact-length baseline JPEG encoder (`src/jpeg`), start-up script generator and simulator (`src/wallpaper`; used by GR Mod 0.7 and earlier, whose power-off images rotated through a start-up script on the card; 0.8 builds them into the firmware and the UI no longer offers the script), memory-card layout planning (`src/card`), and the `Engine` facade (`src/app`).
 - `ui/`    React UI (Vite). Talks to the platform through `src/host.ts` only.
