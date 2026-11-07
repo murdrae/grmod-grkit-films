@@ -35,6 +35,7 @@ import { installGr3xLiveView } from './liveview';
 import { installGr3xRawDevelopment } from './raw-development';
 import { installGr3xShading } from './shading';
 import { installGr3xFullFrameRaw } from './raw-full-frame';
+import { drawGr3xGoldenGridIcon, installGr3xGoldenGrid } from './grid';
 
 export const GR3X_ADJ = {
   order: 0x53b59e48,
@@ -100,6 +101,8 @@ export interface Gr3xAdjFeatures {
   /** Round 8: the Image Control order and hidden looks (look-layout.ts; the camera's order with
    * nothing hidden is the same as none). */
   lookLayout?: Gr3xLookLayout;
+  /** Round 10: Golden Ratio as a third Grid Style (grid.ts). Absent: the files as before. */
+  goldenGrid?: boolean;
 }
 /** How the image-control layer builds on this one (not recorded: it follows from the films). */
 export interface Gr3xAdjLayer {
@@ -120,6 +123,8 @@ export async function buildGr3xAdjResearch(raw: Uint8Array, ratioMenu: readonly 
   const round10 = features.round10 === true;
   if (round10 && !round9) fail('IIIx round 10 builds on round 9');
   if (features.lookLayout && !round8) fail('IIIx look layout: round 8');
+  const goldenGrid = features.goldenGrid === true;
+  if (goldenGrid && !round10) fail('IIIx Golden Ratio grid: round 10');
   if (round7 && dateImprint && features.dateMenu !== 'submenu') fail('IIIx round 7: the date imprint submenu');
   const dateForm: Gr3xDateForm = features.dateMenu === 'submenu' ? 'submenu' : 'list';
   // Texts of the date imprint: name, short, long (both forms), then On/Off and Style (submenu),
@@ -202,7 +207,7 @@ export async function buildGr3xAdjResearch(raw: Uint8Array, ratioMenu: readonly 
   const iconIds = new Map([[0, 257], [3, 256]]);
   // Pictures: round 5 line name, Original, names; round 6 Type, Picture, Original, names.
   const pictureTexts = pictureCount ? (pictureSub ? 3 : 2) + pictureCount : 0;
-  const columns = m.textCount + additions.length + (softFocus ? 1 : 0) + dateTexts + pictureTexts;
+  const columns = m.textCount + additions.length + (softFocus ? 1 : 0) + dateTexts + pictureTexts + (goldenGrid ? 1 : 0);
   const softText = m.textCount + additions.length, softIcon = m.iconCount + additions.length;
   // Date imprint: name, the two style names; two style icons (after the soft-focus ones).
   const dateText = softText + (softFocus ? 1 : 0), dateIcon = softIcon + (softFocus ? 1 : 0);
@@ -213,6 +218,8 @@ export async function buildGr3xAdjResearch(raw: Uint8Array, ratioMenu: readonly 
   const pictureText = dateText + dateTexts, pictureIcon = dateIcon + dateIconCount;
   const pictureIds = { title: pictureText, original: pictureText + 1, names: pictures.map((_, k) => pictureText + 2 + k), icons: pictures.map((_, k) => pictureIcon + k) };
   // Round 6: thumbnails 520 x 200, the five factory pictures (by camera variant) first.
+  // Golden Ratio (grid.ts): its name and its icon, after everything else.
+  const gridText = pictureText + pictureTexts;
   const endIds = { typeText: pictureText, pictureText: pictureText + 1, factoryText: pictureText + 2,
     factoryIcons: GR3X_FACTORY_PICTURES.map((_, k) => pictureIcon + k), icons: pictures.map((_, k) => pictureIcon + GR3X_FACTORY_PICTURES.length + k) };
   const rows = Array.from({ length: m.languages }, (_, l) => {
@@ -254,11 +261,17 @@ export async function buildGr3xAdjResearch(raw: Uint8Array, ratioMenu: readonly 
       names.forEach((record, k) => new DataView(row.buffer).setUint32((pictureText + head + k) * 4, record, true));
     });
   }
+  if (goldenGrid) {
+    const name = 'Golden Ratio', text = append(utf16z(name));
+    const record = append(Uint8Array.from([name.length + 1, 1, 0, 0, ...words([text])]));
+    rows.forEach(row => new DataView(row.buffer).setUint32(gridText * 4, record, true));
+  }
   const textRoots = append(words(rows.map(row => append(row))));
   for (const [low, high] of m.textRootSites) pair(low, high, 3, m.textRoots, textRoots, 'extended IIIx language directory');
   for (const at of m.textBounds) patch(at, movWord(3, m.textCount - 1), movWord(3, columns - 1), 'extended IIIx text bound');
 
-  const iconCount = m.iconCount + additions.length + (softFocus ? 1 : 0) + dateIconCount + pictureCount + (pictureSub ? GR3X_FACTORY_PICTURES.length : 0);
+  const iconCount = m.iconCount + additions.length + (softFocus ? 1 : 0) + dateIconCount + pictureCount + (pictureSub ? GR3X_FACTORY_PICTURES.length : 0) + (goldenGrid ? 1 : 0);
+  const gridIcon = iconCount - 1;
   const iconCatalog = new Uint8Array(iconCount * 4);
   iconCatalog.set(read(m.iconRoot, m.iconCount * 4));
   const pixels = additions.map(r => drawRatioIcon(r.ratio));
@@ -301,6 +314,17 @@ export async function buildGr3xAdjResearch(raw: Uint8Array, ratioMenu: readonly 
     new DataView(iconCatalog.buffer).setUint32((pictureIcon + k) * 4, descriptor, true);
     pixels.push(icon); iconOffset += icon.length;
   });
+  if (goldenGrid) {
+    // From the camera's 3x3 Grid icon (336), 60 x 40.
+    const d = read(word(m.iconRoot + 336 * 4), 8), dv = new DataView(d.buffer, d.byteOffset);
+    if (dv.getUint16(0, true) !== 60 || dv.getUint16(2, true) !== 40) fail('IIIx 3x3 Grid icon size');
+    const start = dv.getUint32(4, true) * 4;
+    const icon = drawGr3xGoldenGridIcon(originalIcons.slice(start, start + 9600));
+    if (iconOffset % 4) fail('IIIx ICONBIN alignment');
+    const descriptor = append(Uint8Array.from([60, 0, 40, 0, ...words([iconOffset / 4])]));
+    new DataView(iconCatalog.buffer).setUint32(gridIcon * 4, descriptor, true);
+    pixels.push(icon); iconOffset += icon.length;
+  }
   const iconRoot = append(iconCatalog);
   for (const [low, r] of m.iconRootSites) pair(low, low + 4, r, m.iconRoot, iconRoot, 'extended IIIx icon directory');
   for (const [at, r] of m.iconBounds) patch(at, movWord(r, m.iconCount - 1), movWord(r, iconCount - 1), 'extended IIIx icon bound');
@@ -324,6 +348,7 @@ export async function buildGr3xAdjResearch(raw: Uint8Array, ratioMenu: readonly 
   const shadingEntries = installGr3xShading(program);
   const softEntries = softFocus ? installGr3xAdjSoftFocus({ code, append, patch, word }, softText, softIcon, round10) : {};
   const fullRawEntries = installGr3xFullFrameRaw(program);
+  const gridEntries = goldenGrid ? installGr3xGoldenGrid({ code, patch }, { text: gridText, icon: gridIcon }) : {};
   const endScreen = pictureSub ? installGr3xEndScreen({ code, append, patch, word }, { ...endIds,
     choices: pictures.map(x => x.id!), resources: pictures.map((_, k) => GR3X_JPEG_TABLE_COUNT + k), ...(date8 ? { modeByte: true } : {}),
     ...(round10 ? { r10: { sites, u32: word } } : {}) }) : undefined;
@@ -383,12 +408,13 @@ export async function buildGr3xAdjResearch(raw: Uint8Array, ratioMenu: readonly 
     schema: 1, kind: 'gr3x-adj-patchset' as const, profile: profile.id,
     originalRtosSha256: profile.rtosSha256, originalLength: p.rtosLength, base: BASE,
     sites, append: { address: geometry.append.address, bytes: hex(payload) }, geometry,
-    entries: { ...geometry.entries, ...scaffold, ratioText, ratioIcon, fnCycle, ...imageEntries, ...developEntries, ...afEntries, ...mapEntries, ...liveEntries, ...rawEntries, ...shadingEntries, ...fullRawEntries, ...softEntries, ...dateEntries, ...lookEntries },
+    entries: { ...geometry.entries, ...scaffold, ratioText, ratioIcon, fnCycle, ...imageEntries, ...developEntries, ...afEntries, ...mapEntries, ...liveEntries, ...rawEntries, ...shadingEntries, ...fullRawEntries, ...gridEntries, ...softEntries, ...dateEntries, ...lookEntries },
     catalogs: { order, textRoots, textColumns: columns, iconRoot, iconCount },
     adjSoftFocus: softFocus,
     dateImprint: dateImprint ? { ...dateIds, form: dateForm, ...(round7 ? { iconOff: 296, iconOn: 297 } : {}), ...(lookNames ? { names: lookNames } : {}) } : undefined,
     round7,
     ...(round8 ? { round8 } : {}), ...(round9 ? { round9 } : {}), ...(round10 ? { round10 } : {}),
+    ...(goldenGrid ? { goldenGrid: { text: gridText, icon: gridIcon } } : {}),
     ...(round8 && !layer.looksFollow && features.lookLayout && !isGr3xFactoryLayout(features.lookLayout, 0) ? { lookLayout: { order: [...features.lookLayout.order], hidden: [...features.lookLayout.hidden] } } : {}),
     pictures: pictureCount ? (pictureSub ? { form: 'submenu' as const, count: pictureCount, ...endIds, names: pictures.map((_, k) => endIds.factoryText + 1 + k),
       factoryIcons: [...endIds.factoryIcons], icons: [...endIds.icons], choices: pictures.map(x => x.id!) }

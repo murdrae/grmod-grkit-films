@@ -64,6 +64,17 @@ sectors and are exact. For scale, GRKit's own fits are 0.5–1.6 mean (holdout) 
 The model uses GR Mod's IIIx Standard reference curve as the base gamma; it is a software model,
 not a camera measurement.
 
+## Golden Ratio grid (GR III 2.20 / IIIx 1.70)
+
+`--golden-grid` (`goldenGrid: true` in `buildFirmware`) adds a third value to the camera's own Grid
+Style menu, after 3x3 Grid and 4x4 Grid: **Golden Ratio**, GRKit's phi grid (`modules/guides`, MIT):
+one line each way at 38.2 % and 61.8 % of the photo area, 2 pixels wide in the camera's grid colour,
+drawn by the camera's own grid code (`core/src/fw/gr3x170/grid.ts`). Choose it where you choose the
+grid type; the grid display itself is switched on as before. 3x3 and 4x4 are unchanged.
+`tools/gr3x170/grid_verify.py BUILT.rtos OFFICIAL.rtos` runs the grid's draw in the emulator and checks
+the lines. GRKit's other styles (centre, diagonals, thirds + centre), colours and opacity are not
+built. The app has no switch for it yet: build with `tools/grkit/build.ts ... --golden-grid`.
+
 ## Building and installing (GR III 2.20)
 
 1. Keep the official `fwdc239b.bin` from Ricoh's `gr3_v220.zip` (SHA-256 `5c53760b…793e`); Ricoh offers
@@ -72,7 +83,7 @@ not a camera measurement.
    - in the app (`shell/dist/grmod`): open the official file, add films (up to 20), drop an
      `effect.json` from `third_party/grkit/effects/<id>/` on each, add at least one ratio (GR III builds
      need one), switch on the date imprint if wanted, and write to a folder; or
-   - `npx vite-node tools/grkit/build.ts OFFICIAL/fwdc239b.bin OUTDIR id,id,...` (default: the first 20).
+   - `npx vite-node tools/grkit/build.ts OFFICIAL/fwdc239b.bin OUTDIR id,id,... [--golden-grid]` (default: the first 20).
 3. Check the file (optional, also done by the app's self-check):
    ```sh
    python3 -I tools/grkit/verify_bytes.py OUTDIR third_party/grkit/effects id,id,...
@@ -94,5 +105,5 @@ not a camera measurement.
 a 4:3 ratio) installed as an official update; the films work from the camera's normal start, and so
 does the date imprint.
 
-Not tried on a camera yet: a film with highlight correction On (its second MultiAxial set) against Off,
+Not tried on a camera yet: the Golden Ratio grid, a film with highlight correction On (its second MultiAxial set) against Off,
 GR IIIx 1.70, and the 2.10 / 1.60 builds without hue sectors.

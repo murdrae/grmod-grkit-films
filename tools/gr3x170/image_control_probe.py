@@ -17,7 +17,7 @@ from rear_dial_probe import DATA, MODEL, SELECTOR, USER, USERDATA
 if not __debug__:
     raise RuntimeError('Run without Python -O')
 
-SHIM = 0x54100000
+SHIM = 0x54f00000  # above the appended code (a golden-grid build reaches past 0x54100000)
 VALIDATE_TABLE, COMMIT_TABLE = 0x540928f0, 0x54093138
 GAMMA_GUARD, GAMMA_OBJECT = 0x5536d4b8, 0x5536d4bc
 GAMMA_BUFFERS = (0x62090000, 0x62090400, 0x62090800)

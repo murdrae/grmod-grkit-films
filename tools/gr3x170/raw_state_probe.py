@@ -9,7 +9,7 @@ from pipeline_probe import crop,rect
 from ratio_menu import parse
 
 def branch(at,target,link=False):return (0xeb000000 if link else 0xea000000)|(((target-at-8)//4)&0xffffff)
-SHIM=0x54100000
+SHIM=0x54f00000  # above the appended code
 
 class StateProbe(AdjProbe):
     def __init__(self,data,manifest):

@@ -124,5 +124,17 @@ describe.skipIf(!fw || !existsSync(fw))('GRKit films in a GR III 2.20 build', ()
     const films = s.slots.filter(x => GR3X_FILM_IDS.includes(x.id as typeof GR3X_FILM_IDS[number]));
     expect(films.filter(x => x.colorChanged).length).toBe(20);
     expect(films.map(x => x.names.en)).toEqual(chosen.map(id => JSON.parse(text(id)).name));
+    expect(s.goldenGrid).toBeUndefined();
+  }, 600_000);
+
+  it('adds Golden Ratio to Grid Style, recorded and verified', async () => {
+    const engine = await Engine.open(new Uint8Array(readFileSync(fw!)));
+    const ratios = GR3X_T4_CUSTOM.slice(0, 1).map(r => ({ ratio: r.ratio, name: r.name! }));
+    const built = await engine.buildFirmware([], ratios, [], { dateStamp: true, goldenGrid: true });
+    const s = await engine.inspect(built.file);
+    expect(s.verified).toBe(true);
+    expect(s.goldenGrid).toBe(true);
+    // Round 9 (or older) builds have no Golden Ratio.
+    await expect(engine.buildFirmware([], ratios, [], { goldenGrid: true, gr3Round: 9 })).rejects.toThrow(/Golden Ratio/);
   }, 600_000);
 });

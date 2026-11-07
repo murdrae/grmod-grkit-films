@@ -6,7 +6,8 @@
 > without GRKit's SD-card scripts. Matrix and tone curves go over exactly, the post matrix rounded to Q9;
 > on GR III 2.20 / IIIx 1.70 each film also gets GRKit's hue sectors as a MultiAxial set of its own
 > (2.10 / 1.60 leave them out). Drop an `effect.json` on a GR III film card in the app, or use
-> `tools/grkit/build.ts`. Checked in software (GR Mod's self-check against the official file, the
+> `tools/grkit/build.ts`; `--golden-grid` also adds GRKit's Golden Ratio (phi) grid to the camera's Grid
+> Style menu (GR III 2.20 / IIIx 1.70, not yet camera-tested). Checked in software (GR Mod's self-check against the official file, the
 > emulator probes, byte checks against the definitions) and **tested on a GR III with firmware 2.20**
 > (2026-11-07): the 20-film build installs, and its films and the date imprint work. Not yet tried there: highlight correction
 > with a film, and GR IIIx / GR III 2.10 builds. Details,
