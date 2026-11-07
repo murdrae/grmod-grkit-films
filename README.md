@@ -1,5 +1,16 @@
 # GR Mod
 
+> **This fork** ([murdrae/grmod-grkit-films](https://github.com/murdrae/grmod-grkit-films)) is
+> [GR Mod](https://github.com/Maxwooow/Ricoh-GRMod) 0.8.8 with [GRKit](https://github.com/ahonn/grkit)'s
+> 21 film looks built into GR III / IIIx firmware as films, so they work from the camera's normal start
+> without GRKit's SD-card scripts. Matrix and tone curves go over exactly, the post matrix rounded to Q9;
+> on GR III 2.20 / IIIx 1.70 each film also gets GRKit's hue sectors as a MultiAxial set of its own
+> (2.10 / 1.60 leave them out). Drop an `effect.json` on a GR III film card in the app, or use
+> `tools/grkit/build.ts`. Checked in software (GR Mod's self-check against the official file, the
+> emulator probes, byte checks against the definitions); **not yet tested on a camera**. Details,
+> build and install: [tools/grkit/README.md](tools/grkit/README.md). Look licences:
+> [third_party/grkit/NOTICE.md](third_party/grkit/NOTICE.md). Everything below is upstream GR Mod's README.
+
 A small desktop tool for the Ricoh GR IV / GR IV HDF (firmware 1.20 or 1.11), the GR IV Monochrome
 (firmware 1.10, the same file as GR IV 1.20), the GR III / GR III HDF (firmware 2.20 or 2.10) and the
 GR IIIx / GR IIIx HDF (firmware 1.70 or 1.60). Not a Ricoh product.
