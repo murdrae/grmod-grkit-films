@@ -91,7 +91,8 @@ not a camera measurement.
 ## Camera test
 
 2026-11-07, GR III, firmware 2.20: the 20-film build (all but Tri-X 400 Red, with the date imprint and
-a 4:3 ratio) installed as an official update, and the films work from the camera's normal start.
+a 4:3 ratio) installed as an official update; the films work from the camera's normal start, and so
+does the date imprint.
 
 Not tried on a camera yet: a film with highlight correction On (its second MultiAxial set) against Off,
 GR IIIx 1.70, and the 2.10 / 1.60 builds without hue sectors.
