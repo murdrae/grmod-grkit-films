@@ -7,7 +7,9 @@
 > on GR III 2.20 / IIIx 1.70 each film also gets GRKit's hue sectors as a MultiAxial set of its own
 > (2.10 / 1.60 leave them out). Drop an `effect.json` on a GR III film card in the app, or use
 > `tools/grkit/build.ts`. Checked in software (GR Mod's self-check against the official file, the
-> emulator probes, byte checks against the definitions); **not yet tested on a camera**. Details,
+> emulator probes, byte checks against the definitions) and **tested on a GR III with firmware 2.20**
+> (2026-11-07): the 20-film build installs and its films work. Not yet tried there: highlight correction
+> with a film, and GR IIIx / GR III 2.10 builds. Details,
 > build and install: [tools/grkit/README.md](tools/grkit/README.md). Look licences:
 > [third_party/grkit/NOTICE.md](third_party/grkit/NOTICE.md). Everything below is upstream GR Mod's README.
 

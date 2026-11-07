@@ -88,7 +88,10 @@ not a camera measurement.
 6. Back to the official firmware: Setup › Reset › Reset to Factory Default first (films and the ratio
    are values the official firmware does not know), then install the official `fwdc239b.bin` the same way.
 
-## Not checked in software
+## Camera test
 
-What the camera renders, how soon after power-on the first picture has the film's colours, and live
-view: those need the camera (see the main README's GR III test procedure).
+2026-11-07, GR III, firmware 2.20: the 20-film build (all but Tri-X 400 Red, with the date imprint and
+a 4:3 ratio) installed as an official update, and the films work from the camera's normal start.
+
+Not tried on a camera yet: a film with highlight correction On (its second MultiAxial set) against Off,
+GR IIIx 1.70, and the 2.10 / 1.60 builds without hue sectors.
