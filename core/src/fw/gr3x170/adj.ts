@@ -3,6 +3,7 @@
  * Every address below was located in the exact IIIx image, not shifted from GR IV.
  * The format checks cover IIIx's 8-byte icon descriptors and 21 native text rows.
  * Camera startup, persistent storage and the physical ISP remain hardware-unverified. */
+import { drawSnapFeetIcons, installGr3xSnapFeet } from './snap-feet';
 import { assembleWords, branchWord, movWord, wordsToBytes } from '../aspect/arm';
 import { drawRatioIcon } from '../aspect/icon';
 import { drawSoftFocusIcon, SOFT_FOCUS_NAMES } from '../aspect/softfocus';
@@ -286,8 +287,9 @@ export async function buildGr3xAdjResearch(raw: Uint8Array, ratioMenu: readonly 
   for (const [low, high] of m.textRootSites) pair(low, high, 3, m.textRoots, textRoots, 'extended IIIx language directory');
   for (const at of m.textBounds) patch(at, movWord(3, m.textCount - 1), movWord(3, columns - 1), 'extended IIIx text bound');
 
-  const iconCount = m.iconCount + additions.length + (softFocus ? 1 : 0) + dateIconCount + pictureCount + (pictureSub ? GR3X_FACTORY_PICTURES.length : 0) + (goldenGrid ? 1 : 0);
-  const gridIcon = iconCount - 1;
+  const iconCount = m.iconCount + additions.length + (softFocus ? 1 : 0) + dateIconCount + pictureCount + (pictureSub ? GR3X_FACTORY_PICTURES.length : 0) + (goldenGrid ? 1 : 0) + (snapFeet ? 3 : 0);
+  // Golden Ratio's icon, then (snap distance in feet) the scale's ft, 16 and 3.3.
+  const snapIcon = iconCount - 3, gridIcon = iconCount - 1 - (snapFeet ? 3 : 0);
   const iconCatalog = new Uint8Array(iconCount * 4);
   iconCatalog.set(read(m.iconRoot, m.iconCount * 4));
   const pixels = additions.map(r => drawRatioIcon(r.ratio));
@@ -341,6 +343,21 @@ export async function buildGr3xAdjResearch(raw: Uint8Array, ratioMenu: readonly 
     new DataView(iconCatalog.buffer).setUint32(gridIcon * 4, descriptor, true);
     pixels.push(icon); iconOffset += icon.length;
   }
+  if (snapFeet) {
+    const get = (id: number) => {
+      const d = read(word(m.iconRoot + id * 4), 8), dv = new DataView(d.buffer, d.byteOffset);
+      if (dv.getUint16(0, true) !== 30 || dv.getUint16(2, true) !== 20) fail(`IIIx scale icon ${id} size`);
+      const start = dv.getUint32(4, true) * 4;
+      return originalIcons.slice(start, start + 2400);
+    };
+    const drawn = drawSnapFeetIcons(get);
+    [drawn.ft, drawn.sixteen, drawn.threePointThree].forEach((icon, k) => {
+      if (iconOffset % 4) fail('IIIx ICONBIN alignment');
+      const descriptor = append(Uint8Array.from([30, 0, 20, 0, ...words([iconOffset / 4])]));
+      new DataView(iconCatalog.buffer).setUint32((snapIcon + k) * 4, descriptor, true);
+      pixels.push(icon); iconOffset += icon.length;
+    });
+  }
   const iconRoot = append(iconCatalog);
   for (const [low, r] of m.iconRootSites) pair(low, low + 4, r, m.iconRoot, iconRoot, 'extended IIIx icon directory');
   for (const [at, r] of m.iconBounds) patch(at, movWord(r, m.iconCount - 1), movWord(r, iconCount - 1), 'extended IIIx icon bound');
@@ -364,6 +381,7 @@ export async function buildGr3xAdjResearch(raw: Uint8Array, ratioMenu: readonly 
   const shadingEntries = installGr3xShading(program);
   const softEntries = softFocus ? installGr3xAdjSoftFocus({ code, append, patch, word }, softText, softIcon, round10) : {};
   const fullRawEntries = installGr3xFullFrameRaw(program);
+  if (snapFeet) installGr3xSnapFeet({ patch }, { ft: snapIcon, sixteen: snapIcon + 1, threePointThree: snapIcon + 2 });
   const gridEntries = goldenGrid ? installGr3xGoldenGrid({ code, patch }, { text: gridText, icon: gridIcon }) : {};
   const endScreen = pictureSub ? installGr3xEndScreen({ code, append, patch, word }, { ...endIds,
     choices: pictures.map(x => x.id!), resources: pictures.map((_, k) => GR3X_JPEG_TABLE_COUNT + k), ...(date8 ? { modeByte: true } : {}),

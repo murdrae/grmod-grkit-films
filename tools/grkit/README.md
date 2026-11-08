@@ -80,7 +80,10 @@ built. The app has no switch for it yet: build with `tools/grkit/build.ts ... --
 
 `--snap-feet` (`snapFeet: true`) relabels Snap Focus Distance's eight choices in every language:
 0.3m → 1ft, 0.4m → 1.3ft, 1m → 3.3ft, 1.5m → 4.9ft, 2m → 6.6ft, 2.5m → 8.2ft, 3.5m → 11.5ft, 5m → 16.4ft.
-Only the texts change; the camera focuses at the same distances. Not tried on a camera yet.
+The focus distance scale beside the picture (snap and manual focus) becomes ft, ∞, 16, 10, 3.3, 1
+instead of m, ∞, 5, 3, 1, 0.3: its marks stay where they are, with new labels (`core/src/fw/gr3x170/snap-feet.ts`).
+The centimetre scale (macro) stays metric. Only labels change; the camera focuses at the same distances.
+Camera-tested 2026-11-07: the menu and the distance on the shooting screen show feet; the scale is not tried yet.
 
 ## Building and installing (GR III 2.20)
 
