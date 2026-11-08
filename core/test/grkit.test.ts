@@ -137,4 +137,15 @@ describe.skipIf(!fw || !existsSync(fw))('GRKit films in a GR III 2.20 build', ()
     // Round 9 (or older) builds have no Golden Ratio.
     await expect(engine.buildFirmware([], ratios, [], { goldenGrid: true, gr3Round: 9 })).rejects.toThrow(/Golden Ratio/);
   }, 600_000);
+
+  it('labels Snap Focus Distance in feet, recorded and verified', async () => {
+    const engine = await Engine.open(new Uint8Array(readFileSync(fw!)));
+    const ratios = GR3X_T4_CUSTOM.slice(0, 1).map(r => ({ ratio: r.ratio, name: r.name! }));
+    const built = await engine.buildFirmware([], ratios, [], { dateStamp: true, goldenGrid: true, snapFeet: true });
+    const s = await engine.inspect(built.file);
+    expect(s.verified).toBe(true);
+    expect(s.snapFeet).toBe(true);
+    expect(s.goldenGrid).toBe(true);
+    await expect(engine.buildFirmware([], ratios, [], { snapFeet: true, gr3Round: 9 })).rejects.toThrow(/feet/);
+  }, 600_000);
 });

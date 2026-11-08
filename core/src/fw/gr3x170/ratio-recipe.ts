@@ -10,7 +10,7 @@ export const GR3X_RATIO_RECIPE_MAGIC = new TextEncoder().encode('GR3X-RATIO-RECI
 const LIMIT = 4096;
 
 export function encodeGr3xRatioRecipe(menu: readonly Gr3xMenuRatio[], features: { adjSoftFocus?: boolean; dateImprint?: boolean; dateMenu?: string; pictures?: readonly { name: string; id?: number }[]; pictureMenu?: string; round7?: boolean; round8?: boolean; round9?: boolean; round10?: boolean;
-  lookLayout?: { order: readonly number[]; hidden: readonly number[] }; goldenGrid?: boolean } = {}): Uint8Array {
+  lookLayout?: { order: readonly number[]; hidden: readonly number[] }; goldenGrid?: boolean; snapFeet?: boolean } = {}): Uint8Array {
   const data = new TextEncoder().encode(JSON.stringify({
     schema: 1, ratios: gr3xCustoms(menu).map(r => ({ ratio: r.ratio, name: r.name })),
     ...(features.adjSoftFocus ? { adjSoftFocus: true } : {}),
@@ -27,6 +27,7 @@ export function encodeGr3xRatioRecipe(menu: readonly Gr3xMenuRatio[], features: 
     ...(features.round8 && features.lookLayout ? { lookLayout: { order: [...features.lookLayout.order], hidden: [...features.lookLayout.hidden] } } : {}),
     // Round 10: Golden Ratio as a third Grid Style (grid.ts).
     ...(features.round10 && features.goldenGrid ? { goldenGrid: true } : {}),
+    ...(features.round10 && features.snapFeet ? { snapFeet: true } : {}),
   }));
   if (data.length > LIMIT) throw new FirmwareError('bad-edit', 'IIIx ratio recipe is too large');
   const out = new Uint8Array(GR3X_RATIO_RECIPE_MAGIC.length + 4 + data.length);
@@ -43,7 +44,7 @@ export function readGr3xRatioRecipe(appendedRtos: Uint8Array): { ratio: string; 
 
 /** The ratio list and the ADJ features recorded in an appended RTOS area, or null for none. */
 export function readGr3xBuildRecipe(appendedRtos: Uint8Array): { ratios: { ratio: string; name: string }[]; adjSoftFocus: boolean; dateImprint: boolean; dateMenu: 'list' | 'submenu'; pictures: string[]; pictureMenu: 'list' | 'submenu'; pictureIds: number[]; round7: boolean; round8: boolean; round9: boolean; round10: boolean;
-  lookLayout?: { order: number[]; hidden: number[] }; goldenGrid: boolean } | null {
+  lookLayout?: { order: number[]; hidden: number[] }; goldenGrid: boolean; snapFeet: boolean } | null {
   const magic = GR3X_RATIO_RECIPE_MAGIC;
   for (let at = 0; at + magic.length + 4 <= appendedRtos.length; at++) {
     if (!magic.every((v, i) => appendedRtos[at + i] === v)) continue;
@@ -53,14 +54,14 @@ export function readGr3xBuildRecipe(appendedRtos: Uint8Array): { ratios: { ratio
     const r = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(appendedRtos.subarray(start, start + size)));
     if (r?.schema !== 1 || !Array.isArray(r.ratios) || (r.round !== undefined && r.round !== 7 && r.round !== 8 && r.round !== 9 && r.round !== 10) ||
         (r.lookLayout !== undefined && ((r.round !== 8 && r.round !== 9 && r.round !== 10) || typeof r.lookLayout !== 'object' || r.lookLayout === null || !Array.isArray(r.lookLayout.order) || !Array.isArray(r.lookLayout.hidden) ||
-          [...r.lookLayout.order, ...r.lookLayout.hidden].some((x: unknown) => !Number.isInteger(x) || (x as number) < 0 || (x as number) > 255))) || (r.adjSoftFocus !== undefined && r.adjSoftFocus !== true) || (r.goldenGrid !== undefined && (r.goldenGrid !== true || r.round !== 10)) || (r.dateImprint !== undefined && r.dateImprint !== true) || (r.dateMenu !== undefined && r.dateMenu !== 'submenu') ||
+          [...r.lookLayout.order, ...r.lookLayout.hidden].some((x: unknown) => !Number.isInteger(x) || (x as number) < 0 || (x as number) > 255))) || (r.adjSoftFocus !== undefined && r.adjSoftFocus !== true) || (r.goldenGrid !== undefined && (r.goldenGrid !== true || r.round !== 10)) || (r.snapFeet !== undefined && (r.snapFeet !== true || r.round !== 10)) || (r.dateImprint !== undefined && r.dateImprint !== true) || (r.dateMenu !== undefined && r.dateMenu !== 'submenu') ||
         (r.pictures !== undefined && (!Array.isArray(r.pictures) || r.pictures.some((x: unknown) => typeof x !== 'string'))) ||
         (r.pictureMenu !== undefined && (r.pictureMenu !== 'submenu' || !Array.isArray(r.pictureIds) || r.pictureIds.length !== r.pictures?.length ||
           r.pictureIds.some((x: unknown) => !Number.isInteger(x) || (x as number) < 1 || (x as number) > 0xffffffff))) || r.ratios.some((x: unknown) => typeof x !== 'object' || x === null ||
         typeof (x as Record<string, unknown>).ratio !== 'string' || typeof (x as Record<string, unknown>).name !== 'string'))
       throw new FirmwareError('bad-edit', 'invalid IIIx ratio recipe');
     return { ratios: r.ratios.map((x: { ratio: string; name: string }) => ({ ratio: x.ratio, name: x.name })), adjSoftFocus: r.adjSoftFocus === true, dateImprint: r.dateImprint === true, dateMenu: r.dateMenu === 'submenu' ? 'submenu' : 'list', pictures: r.pictures ?? [],
-      pictureMenu: r.pictureMenu === 'submenu' ? 'submenu' : 'list', pictureIds: r.pictureIds ?? [], round7: r.round >= 7, round8: r.round >= 8, round9: r.round >= 9, round10: r.round === 10, goldenGrid: r.goldenGrid === true,
+      pictureMenu: r.pictureMenu === 'submenu' ? 'submenu' : 'list', pictureIds: r.pictureIds ?? [], round7: r.round >= 7, round8: r.round >= 8, round9: r.round >= 9, round10: r.round === 10, goldenGrid: r.goldenGrid === true, snapFeet: r.snapFeet === true,
       ...(r.lookLayout ? { lookLayout: { order: r.lookLayout.order.slice(), hidden: r.lookLayout.hidden.slice() } } : {}) };
   }
   return null;

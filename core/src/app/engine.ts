@@ -206,6 +206,8 @@ export interface FirmwareSummary {
   directFlash?: boolean;
   /** True when the file adds Golden Ratio to Grid Style (GR III 2.20 / IIIx 1.70). */
   goldenGrid?: boolean;
+  /** True when the file labels Snap Focus Distance in feet (GR III 2.20 / IIIx 1.70). */
+  snapFeet?: boolean;
 }
 
 /** Additions besides the slots and the ratios. */
@@ -229,6 +231,8 @@ export interface BuildOptions {
   directFlash?: boolean;
   /** GR III 2.20 / IIIx 1.70: Golden Ratio as a third Grid Style (fw/gr3x170/grid.ts). */
   goldenGrid?: boolean;
+  /** GR III 2.20 / IIIx 1.70: Snap Focus Distance labelled in feet (the distances are unchanged). */
+  snapFeet?: boolean;
   /**
    * The settings guard and what comes with it from 0.8.2 (see `aspect/guard.ts`); default true.
    * False only to build files as GR Mod 0.8.1 and earlier did (regression tests).
@@ -367,20 +371,20 @@ export class Engine {
   private readonly g4: Gr4Program;
 
   private fixedGr3x(softFocus: readonly SoftFocusRequest[] = [], looks?: Gr3xLookOptions, menu: readonly Gr3xMenuRatio[] = GR3X_T4_MENU, adjSoftFocus = false, dateImprint = false, pictures: readonly Gr3xPictureSpec[] = [], dateMenu: 'list' | 'submenu' = 'submenu', pictureMenu: 'list' | 'submenu' = 'submenu',
-    round: { round7?: boolean; round8?: boolean; round9?: boolean; round10?: boolean; lookLayout?: Gr3xLookLayout; goldenGrid?: boolean } = {}): Promise<FirmwareBuild> {
+    round: { round7?: boolean; round8?: boolean; round9?: boolean; round10?: boolean; lookLayout?: Gr3xLookLayout; goldenGrid?: boolean; snapFeet?: boolean } = {}): Promise<FirmwareBuild> {
     const requests = [...softFocus].sort((a, b) => a.level - b.level);
     const round7 = round.round7 === true, round8 = round7 && round.round8 === true, round9 = round8 && round.round9 === true, round10 = round9 && round.round10 === true, lookLayout = round8 ? round.lookLayout : undefined;
-    const goldenGrid = round10 && round.goldenGrid === true;
-    const key = JSON.stringify({ requests, looks, menu, adjSoftFocus, dateImprint, dateMenu, pictureMenu, round7, round8, round9, round10, lookLayout, goldenGrid, pictures: pictures.map(p => ({ id: p.id, name: p.name, jpeg: Array.from(p.jpeg) })) });
+    const goldenGrid = round10 && round.goldenGrid === true, snapFeet = round10 && round.snapFeet === true;
+    const key = JSON.stringify({ requests, looks, menu, adjSoftFocus, dateImprint, dateMenu, pictureMenu, round7, round8, round9, round10, lookLayout, goldenGrid, snapFeet, pictures: pictures.map(p => ({ id: p.id, name: p.name, jpeg: Array.from(p.jpeg) })) });
     let candidate = this.gr3xCandidates.get(key);
     if (candidate) return candidate;
     candidate = this.gr3!.buildGr3xTestFirmware(this.raw, requests, looks, menu, { adjSoftFocus, ...(dateImprint ? { dateImprint, dateMenu } : {}), ...(pictures.length ? { pictures, pictureMenu } : {}), ...(round7 ? { round7 } : {}),
-      ...(round8 ? { round8 } : {}), ...(round9 ? { round9 } : {}), ...(round10 ? { round10 } : {}), ...(lookLayout ? { lookLayout } : {}), ...(goldenGrid ? { goldenGrid } : {}) }).then(r => { const built: FirmwareBuild = {
+      ...(round8 ? { round8 } : {}), ...(round9 ? { round9 } : {}), ...(round10 ? { round10 } : {}), ...(lookLayout ? { lookLayout } : {}), ...(goldenGrid ? { goldenGrid } : {}), ...(snapFeet ? { snapFeet } : {}) }).then(r => { const built: FirmwareBuild = {
       file: r.bytes, sha256: r.report.outputSha256, decodedSha256: r.decodedSha256,
       changedFrames: r.changedFrames, changedBytes: r.changedBytes,
       ranges: r.report.ranges, checks: r.report.checks, features: { ...(looks?.monoReplicas ? { monoUnlock: true } : {}), ...(adjSoftFocus ? { adjSoftFocus: true } : {}), ...(dateImprint ? { dateStamp: true } : {}),
         ...(pictures.length ? { shutdown: { pictures: pictures.map((p, k) => ({ id: p.id ?? k + 1, name: p.name, jpeg: p.jpeg })), factory: [] } } : {}),
-        ...(lookLayout ? { lookLayout: { order: [...lookLayout.order], hidden: [...lookLayout.hidden] } } : {}), ...(goldenGrid ? { goldenGrid } : {}) },
+        ...(lookLayout ? { lookLayout: { order: [...lookLayout.order], hidden: [...lookLayout.hidden] } } : {}), ...(goldenGrid ? { goldenGrid } : {}), ...(snapFeet ? { snapFeet } : {}) },
       ratios: gr3xCustoms(r.manifest.menu).map(x => {
         const plan = planGr3xRatio(x.ratio);
         return { id: x.id, name: x.name, ratio: x.ratio, actual: plan.actual, sizes: plan.sizes };
@@ -553,7 +557,7 @@ export class Engine {
       let pictureMenu: 'list' | 'submenu' = 'list';
       let round7 = false, round8 = false, round9 = false, round10 = false;
       let lookLayout: Gr3xLookLayout | undefined;
-      let goldenGrid = false;
+      let goldenGrid = false, snapFeet = false;
       if (!official) try {
         // Read only recognized negative gain rows, rebuild from the verified
         // original, and compare the entire file. A valid container or metadata
@@ -570,6 +574,7 @@ export class Engine {
             menu = planGr3xMenu(build.ratios); adjSoftFocus = build.adjSoftFocus; dateImprint = build.dateImprint; dateMenu = build.dateMenu; pictureMenu = build.pictureMenu; round7 = build.round7;
             round8 = build.round8; round9 = build.round9; round10 = build.round10; lookLayout = build.lookLayout;
             goldenGrid = (build as { goldenGrid?: boolean }).goldenGrid === true;
+            snapFeet = (build as { snapFeet?: boolean }).snapFeet === true;
             // Power-off pictures: the names from the recipe, the JPEGs from the file's own RES section.
             if (build.pictures.length) {
               if (build.pictures.length > this.gr3!.GR3X_MAX_PICTURES) throw new FirmwareError('bad-edit', 'IIIx picture recipe');
@@ -585,7 +590,7 @@ export class Engine {
         const changes = this.g4.clarityChanges(decoded, this.gr3!.GR3X_CLARITY_OFFSET);
 
         if (changes.every(c => this.g4.SOFT_FOCUS_LEVELS.includes(c.level as SoftFocusLevel) && c.strength !== 'custom')) {
-          candidate = await this.fixedGr3x(changes as SoftFocusRequest[], looks ?? undefined, menu, adjSoftFocus, dateImprint, pictures, dateMenu, pictureMenu, { round7, round8, round9, round10, ...(lookLayout ? { lookLayout } : {}), ...(goldenGrid ? { goldenGrid } : {}) });
+          candidate = await this.fixedGr3x(changes as SoftFocusRequest[], looks ?? undefined, menu, adjSoftFocus, dateImprint, pictures, dateMenu, pictureMenu, { round7, round8, round9, round10, ...(lookLayout ? { lookLayout } : {}), ...(goldenGrid ? { goldenGrid } : {}), ...(snapFeet ? { snapFeet } : {}) });
           softFocus = changes;
         }
       } catch { /* unrecognized input remains non-writable */ }
@@ -600,7 +605,7 @@ export class Engine {
         })) : [], ratios: matched ? candidate!.ratios : [], softFocus: matched ? softFocus : [],
         adjSoftFocus: matched && adjSoftFocus, dateStamp: matched && dateImprint, monoUnlock: matched && looks?.monoReplicas === true, extraSlots: [],
         ...(matched && pictures.length ? { shutdownPictures: pictures.map((p, k) => ({ id: p.id ?? k + 1, name: p.name, jpeg: p.jpeg })) } : {}),
-        ...(matched && lookLayout ? { lookLayout: { order: [...lookLayout.order], hidden: [...lookLayout.hidden] } } : {}), ...(matched && goldenGrid ? { goldenGrid: true } : {}) };
+        ...(matched && lookLayout ? { lookLayout: { order: [...lookLayout.order], hidden: [...lookLayout.hidden] } } : {}), ...(matched && goldenGrid ? { goldenGrid: true } : {}), ...(matched && snapFeet ? { snapFeet: true } : {}) };
     }
     if (raw.length === BRIDGE_SIZE && sha256 === BRIDGE_SHA256) return { sha256, kind: 'bridge', changedBytes: 0, verified: true, slots: [], ratios: [], softFocus: [], adjSoftFocus: false, dateStamp: false, monoUnlock: false, extraSlots: [] };
     const describe = (d: Uint8Array): FirmwareSummary['slots'] =>
@@ -931,7 +936,7 @@ export class Engine {
   /** Build a firmware file. The result has passed the built-in self-check (otherwise this throws). */
   async buildFirmware(requests: SlotRequest[], ratios: readonly RatioSpec[] = [], softFocus: readonly SoftFocusRequest[] = [], options: BuildOptions = {}): Promise<FirmwareBuild> {
     if (this.info.family === 'gr3x') {
-      if (Object.entries(options).some(([k, v]) => k !== 'monoUnlock' && k !== 'adjSoftFocus' && k !== 'dateStamp' && k !== 'shutdownPictures' && k !== 'filmCount' && k !== 'guard' && k !== 'lookLayout' && k !== 'gr3Round' && k !== 'goldenGrid' && v !== undefined && v !== false && !(Array.isArray(v) && !v.length)))
+      if (Object.entries(options).some(([k, v]) => k !== 'monoUnlock' && k !== 'adjSoftFocus' && k !== 'dateStamp' && k !== 'shutdownPictures' && k !== 'filmCount' && k !== 'guard' && k !== 'lookLayout' && k !== 'gr3Round' && k !== 'goldenGrid' && k !== 'snapFeet' && v !== undefined && v !== false && !(Array.isArray(v) && !v.length)))
         throw new FirmwareError('gr3x-unsupported', 'added Image Control slots and the test settings of the date imprint are not ported to GR III / IIIx');
       if (options.shutdownPictures?.length && !this.info.capabilities.menuPictures)
         throw new FirmwareError('gr3x-unsupported', 'this GR III / IIIx file has no End Screen pictures');
@@ -983,11 +988,12 @@ export class Engine {
       const round10 = round9 && options.gr3Round !== 9;
       if (options.lookLayout && !round8) throw new FirmwareError('bad-look-layout', 'the Image Control order needs a round 8 build');
       if (options.goldenGrid && (this.gr3 !== Gr3Program220 || !round10)) throw new FirmwareError('gr3x-unsupported', 'the Golden Ratio grid needs GR III 2.20 / IIIx 1.70 and a round 10 build');
+      if (options.snapFeet && (this.gr3 !== Gr3Program220 || !round10)) throw new FirmwareError('gr3x-unsupported', 'snap distance in feet needs GR III 2.20 / IIIx 1.70 and a round 10 build');
       const lookLayout = options.lookLayout && !isGr3xFactoryLayout(options.lookLayout, filmCount ?? 0) ? options.lookLayout : undefined;
       if (options.lookLayout) validateGr3xLookLayout(options.lookLayout, filmCount ?? 0);
       const r = await this.fixedGr3x(softFocus, looks, menu, !!options.adjSoftFocus, !!options.dateStamp,
         (options.shutdownPictures ?? []).map(p => ({ id: p.id, name: p.name, jpeg: p.jpeg })), 'submenu', 'submenu',
-        { round7, round8, round9, round10, ...(lookLayout ? { lookLayout } : {}), ...(options.goldenGrid ? { goldenGrid: true } : {}) });
+        { round7, round8, round9, round10, ...(lookLayout ? { lookLayout } : {}), ...(options.goldenGrid ? { goldenGrid: true } : {}), ...(options.snapFeet ? { snapFeet: true } : {}) });
       return { ...r, file: r.file.slice() };
     }
     if (this.layout === null || !this.info.capabilities.build) requireGr3xPort('custom firmware');

@@ -76,6 +76,12 @@ modes where Display Customization › Shooting Info. Display has Grid Guide tick
 the lines. GRKit's other styles (centre, diagonals, thirds + centre), colours and opacity are not
 built. The app has no switch for it yet: build with `tools/grkit/build.ts ... --golden-grid`.
 
+## Snap distance in feet (GR III 2.20 / IIIx 1.70)
+
+`--snap-feet` (`snapFeet: true`) relabels Snap Focus Distance's eight choices in every language:
+0.3m → 1ft, 0.4m → 1.3ft, 1m → 3.3ft, 1.5m → 4.9ft, 2m → 6.6ft, 2.5m → 8.2ft, 3.5m → 11.5ft, 5m → 16.4ft.
+Only the texts change; the camera focuses at the same distances. Not tried on a camera yet.
+
 ## Building and installing (GR III 2.20)
 
 1. Keep the official `fwdc239b.bin` from Ricoh's `gr3_v220.zip` (SHA-256 `5c53760b…793e`); Ricoh offers
@@ -84,7 +90,7 @@ built. The app has no switch for it yet: build with `tools/grkit/build.ts ... --
    - in the app (`shell/dist/grmod`): open the official file, add films (up to 20), drop an
      `effect.json` from `third_party/grkit/effects/<id>/` on each, add at least one ratio (GR III builds
      need one), switch on the date imprint if wanted, and write to a folder; or
-   - `npx vite-node tools/grkit/build.ts OFFICIAL/fwdc239b.bin OUTDIR id,id,... [--golden-grid]` (default: the first 20).
+   - `npx vite-node tools/grkit/build.ts OFFICIAL/fwdc239b.bin OUTDIR id,id,... [--golden-grid] [--snap-feet]` (default: the first 20).
 3. Check the file (optional, also done by the app's self-check):
    ```sh
    python3 -I tools/grkit/verify_bytes.py OUTDIR third_party/grkit/effects id,id,...

@@ -58,6 +58,9 @@ const BASE = GR3X_170.rtosBase;
 const hex = (bytes: Uint8Array) => Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
 const unhex = (s: string) => Uint8Array.from(s.match(/../g) ?? [], b => parseInt(b, 16));
 const words = (n: readonly number[]) => wordsToBytes(n);
+/** Snap Focus Distance's labels (texts 62..69, the same in every language) and their feet. */
+const SNAP_TEXT = 62;
+const SNAP_FEET = [['0.3m', '1ft'], ['0.4m', '1.3ft'], ['1m', '3.3ft'], ['1.5m', '4.9ft'], ['2m', '6.6ft'], ['2.5m', '8.2ft'], ['3.5m', '11.5ft'], ['5m', '16.4ft']] as const;
 function utf16z(s: string): Uint8Array {
   const out = new Uint8Array((s.length + 1) * 2);
   const view = new DataView(out.buffer);
@@ -103,6 +106,8 @@ export interface Gr3xAdjFeatures {
   lookLayout?: Gr3xLookLayout;
   /** Round 10: Golden Ratio as a third Grid Style (grid.ts). Absent: the files as before. */
   goldenGrid?: boolean;
+  /** Round 10: Snap Focus Distance labelled in feet (texts 62..69, every language; the distances are unchanged). */
+  snapFeet?: boolean;
 }
 /** How the image-control layer builds on this one (not recorded: it follows from the films). */
 export interface Gr3xAdjLayer {
@@ -125,6 +130,8 @@ export async function buildGr3xAdjResearch(raw: Uint8Array, ratioMenu: readonly 
   if (features.lookLayout && !round8) fail('IIIx look layout: round 8');
   const goldenGrid = features.goldenGrid === true;
   if (goldenGrid && !round10) fail('IIIx Golden Ratio grid: round 10');
+  const snapFeet = features.snapFeet === true;
+  if (snapFeet && !round10) fail('IIIx snap distance in feet: round 10');
   if (round7 && dateImprint && features.dateMenu !== 'submenu') fail('IIIx round 7: the date imprint submenu');
   const dateForm: Gr3xDateForm = features.dateMenu === 'submenu' ? 'submenu' : 'list';
   // Texts of the date imprint: name, short, long (both forms), then On/Off and Style (submenu),
@@ -265,6 +272,15 @@ export async function buildGr3xAdjResearch(raw: Uint8Array, ratioMenu: readonly 
     const name = 'Golden Ratio', text = append(utf16z(name));
     const record = append(Uint8Array.from([name.length + 1, 1, 0, 0, ...words([text])]));
     rows.forEach(row => new DataView(row.buffer).setUint32(gridText * 4, record, true));
+  }
+  if (snapFeet) {
+    const en = word(m.textRoots + 1 * 4);
+    SNAP_FEET.forEach(([metric, feet], k) => {
+      const desc = word(en + (SNAP_TEXT + k) * 4), n = read(desc, 1)[0], t = read(word(desc + 4), Math.max(0, n - 1) * 2);
+      if (String.fromCharCode(...Array.from({ length: n - 1 }, (_, i) => t[2 * i] | (t[2 * i + 1] << 8))) !== metric) fail(`IIIx snap distance text ${SNAP_TEXT + k}`);
+      const record = append(Uint8Array.from([feet.length + 1, 1, 0, 0, ...words([append(utf16z(feet))])]));
+      rows.forEach(row => new DataView(row.buffer).setUint32((SNAP_TEXT + k) * 4, record, true));
+    });
   }
   const textRoots = append(words(rows.map(row => append(row))));
   for (const [low, high] of m.textRootSites) pair(low, high, 3, m.textRoots, textRoots, 'extended IIIx language directory');
@@ -414,7 +430,7 @@ export async function buildGr3xAdjResearch(raw: Uint8Array, ratioMenu: readonly 
     dateImprint: dateImprint ? { ...dateIds, form: dateForm, ...(round7 ? { iconOff: 296, iconOn: 297 } : {}), ...(lookNames ? { names: lookNames } : {}) } : undefined,
     round7,
     ...(round8 ? { round8 } : {}), ...(round9 ? { round9 } : {}), ...(round10 ? { round10 } : {}),
-    ...(goldenGrid ? { goldenGrid: { text: gridText, icon: gridIcon } } : {}),
+    ...(goldenGrid ? { goldenGrid: { text: gridText, icon: gridIcon } } : {}), ...(snapFeet ? { snapFeet: true } : {}),
     ...(round8 && !layer.looksFollow && features.lookLayout && !isGr3xFactoryLayout(features.lookLayout, 0) ? { lookLayout: { order: [...features.lookLayout.order], hidden: [...features.lookLayout.hidden] } } : {}),
     pictures: pictureCount ? (pictureSub ? { form: 'submenu' as const, count: pictureCount, ...endIds, names: pictures.map((_, k) => endIds.factoryText + 1 + k),
       factoryIcons: [...endIds.factoryIcons], icons: [...endIds.icons], choices: pictures.map(x => x.id!) }
