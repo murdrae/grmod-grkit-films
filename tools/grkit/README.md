@@ -70,7 +70,8 @@ not a camera measurement.
 Style menu, after 3x3 Grid and 4x4 Grid: **Golden Ratio**, GRKit's phi grid (`modules/guides`, MIT):
 one line each way at 38.2 % and 61.8 % of the photo area, 2 pixels wide in the camera's grid colour,
 drawn by the camera's own grid code (`core/src/fw/gr3x170/grid.ts`). Choose it where you choose the
-grid type; the grid display itself is switched on as before. 3x3 and 4x4 are unchanged.
+grid type. Grid Style only picks the kind of grid: the camera shows a grid only in the display (DISP)
+modes where Display Customization › Shooting Info. Display has Grid Guide ticked. 3x3 and 4x4 are unchanged.
 `tools/gr3x170/grid_verify.py BUILT.rtos OFFICIAL.rtos` runs the grid's draw in the emulator and checks
 the lines. GRKit's other styles (centre, diagonals, thirds + centre), colours and opacity are not
 built. The app has no switch for it yet: build with `tools/grkit/build.ts ... --golden-grid`.
